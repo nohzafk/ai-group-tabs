@@ -5,12 +5,35 @@ interface TabGroup {
   tabIds: (number | undefined)[];
 }
 
+type TabInfo = {
+  id: number | undefined;
+  title: string | undefined;
+  url: string | undefined;
+};
+
+function createClassifierMessage(tabInfo: TabInfo, types: string[]) {
+  return [
+    {
+      role: "system",
+      content: "You are a classifier",
+    },
+    {
+      role: "user",
+      content: `Based on the URL: "${tabInfo.url}" and title: "${
+        tabInfo.title
+      }", classify the browser tab type as one of the following: ${types.join(
+        ", "
+      )}. Respond with only the classification keyword from the list.`,
+    },
+  ];
+}
+
 export async function batchGroupTabs(
   tabs: chrome.tabs.Tab[],
   types: string[],
   openAIKey: string
 ) {
-  const tabInfoList = tabs.map((tab) => {
+  const tabInfoList: TabInfo[] = tabs.map((tab) => {
     return {
       id: tab.id,
       title: tab.title,
@@ -30,8 +53,8 @@ export async function batchGroupTabs(
 
   try {
     await Promise.all(
-      tabInfoList.map(async (tab) => {
-        if (!tab.url) return;
+      tabInfoList.map(async (tabInfo) => {
+        if (!tabInfo.url) return;
         const response = await fetch(`${apiURL}/v1/chat/completions`, {
           method: "POST",
           headers: {
@@ -39,20 +62,7 @@ export async function batchGroupTabs(
             Authorization: `Bearer ${openAIKey}`,
           },
           body: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: "You are a classificator",
-              },
-              {
-                role: "user",
-                content: `Based on the URL: "${tab.url}" and title: "${
-                  tab.title
-                }", classify the browser tab type as one of the following: ${types.join(
-                  ", "
-                )}. Respond with only the classification keyword from the list.`,
-              },
-            ],
+            messages: createClassifierMessage(tabInfo, types),
             model,
           }),
         });
@@ -62,7 +72,7 @@ export async function batchGroupTabs(
 
         const index = types.indexOf(type);
         if (index === -1) return;
-        result[index].tabIds.push(tab.id);
+        result[index].tabIds.push(tabInfo.id);
       })
     );
     return result;
@@ -88,20 +98,10 @@ export async function handleOneTab(
         Authorization: `Bearer ${openAIKey}`,
       },
       body: JSON.stringify({
-        messages: [
-          {
-            role: "system",
-            content: "You are a classificator",
-          },
-          {
-            role: "user",
-            content: `Based on the URL: "${tab.url}" and title: "${
-              tab.title
-            }", classify the browser tab type as one of the following: ${types.join(
-              ", "
-            )}. Respond with only the classification keyword from the list.`,
-          },
-        ],
+        messages: createClassifierMessage(
+          { id: tab.id, url: tab.url, title: tab.title },
+          types
+        ),
         model,
       }),
     });
