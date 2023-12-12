@@ -1,5 +1,13 @@
 import { handleOneTab } from "./services";
-import { getStorage } from "./utils";
+import { DEFAULT_GROUP, DEFAULT_PROMPT, getStorage, setStorage } from "./utils";
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+    setStorage<boolean>("isOn", true);
+    setStorage<string[]>("types", DEFAULT_GROUP);
+    setStorage<string>("prompt", DEFAULT_PROMPT);
+  }
+});
 
 let types: string[] = [];
 
@@ -87,7 +95,7 @@ async function processTabAndGroup(tab: chrome.tabs.Tab, types: any) {
   );
 
   // Check if a group already exists for this type
-  let groupId = tabMap.get(type);
+  const groupId = tabMap.get(type);
 
   // If groupId is not undefined, it means a group with that type already exists
   if (groupId !== undefined) {
@@ -101,10 +109,12 @@ async function processTabAndGroup(tab: chrome.tabs.Tab, types: any) {
 
 async function handleNewTab(tab: chrome.tabs.Tab) {
   const enable = await getStorage<boolean>("isOn");
+  const window = await chrome.windows.get(tab.windowId);
   if (
     !enable ||
     !tab.id ||
     !tab.url ||
+    window.type != "normal" ||
     !types.length ||
     (tab.status === "complete" && tab.url.startsWith("chrome://"))
   ) {
@@ -123,10 +133,12 @@ async function handleTabUpdate(
   tab: chrome.tabs.Tab
 ) {
   const enable = await getStorage<boolean>("isOn");
+  const window = await chrome.windows.get(tab.windowId);
   if (
     !enable ||
     !tab.id ||
     !tab.url ||
+    window.type != "normal" ||
     tab.url.startsWith("chrome://") ||
     changeInfo.status !== "complete"
   ) {
